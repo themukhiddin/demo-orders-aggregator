@@ -9,12 +9,37 @@ const ExternalOrder = z.object({
   id: z.string().min(1),
   customerId: z.string().min(1),
   amount: z.union([z.number(), z.string()]),
+  // Появились в API недавно: в старых заказах их нет
+  discountPercent: z.union([z.number(), z.string()]).nullish(),
+  amountPaid: z.union([z.number(), z.string()]).nullish(),
   status: z.enum(["pending", "paid", "refunded"]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 
 export type ApplyResult = "created" | "updated" | "stale";
+
+/**
+ * Сколько оплачено, в копейках. Источник правды — amountPaid.
+ * Без amountPaid (старые заказы) — amount со скидкой discountPercent; без скидки — amount целиком.
+ */
+function paidKop(amountKop: number, amountPaid: unknown, discountPercent: unknown): number {
+  let paid: number;
+  if (amountPaid !== undefined && amountPaid !== null) {
+    paid = toKop(parseRub(amountPaid));
+  } else if (discountPercent !== undefined && discountPercent !== null) {
+    const pct = typeof discountPercent === "string" ? Number(discountPercent.trim()) : discountPercent;
+    if (typeof pct !== "number" || !Number.isFinite(pct) || pct < 0 || pct > 100) {
+      throw new Error(`invalid discountPercent: ${JSON.stringify(discountPercent)}`);
+    }
+    // Доли копейки отбрасываем, как в toKop
+    paid = Math.floor(Number(((amountKop * (100 - pct)) / 100).toFixed(6)));
+  } else {
+    paid = amountKop;
+  }
+  if (paid > amountKop) throw new Error(`amountPaid ${paid / 100} exceeds amount ${amountKop / 100}`);
+  return paid;
+}
 
 export class OrdersService {
   constructor(private readonly orders: OrdersRepository) {}
@@ -24,10 +49,12 @@ export class OrdersService {
     if (!parsed.success) throw new ValidationError(`invalid order: ${parsed.error.issues.map((i) => i.path.join(".")).join(", ")}`);
     const o = parsed.data;
     try {
+      const amountKop = toKop(parseRub(o.amount));
       return {
         id: o.id,
         customerId: o.customerId,
-        amountKop: toKop(parseRub(o.amount)),
+        amountKop,
+        paidKop: paidKop(amountKop, o.amountPaid, o.discountPercent),
         status: o.status,
         createdAt: parseUtc(o.createdAt),
         updatedAt: parseUtc(o.updatedAt),

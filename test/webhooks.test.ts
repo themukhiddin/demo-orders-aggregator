@@ -48,3 +48,19 @@ describe("POST /webhooks/order", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("POST /webhooks/order — скидки", () => {
+  it("принимает amountPaid и discountPercent строками", async () => {
+    const o = apiOrder({ amount: "1000.00", discountPercent: "10", amountPaid: "900.00" });
+    expect((await postWebhook(ctx.app, o)).json()).toEqual({ result: "created" });
+    const { rows } = await ctx.db.query(`SELECT paid_kop FROM orders WHERE id = $1`, [o.id]);
+    expect(Number(rows[0].paid_kop)).toBe(90000);
+  });
+
+  it("amountPaid больше amount, отрицательный или мусор — 400", async () => {
+    for (const bad of [{ amountPaid: 1000.01 }, { amountPaid: -1 }, { amountPaid: "abc" }, { discountPercent: 101 }, { discountPercent: "x" }]) {
+      const res = await postWebhook(ctx.app, apiOrder({ amount: 1000, ...bad }));
+      expect(res.statusCode, JSON.stringify(bad)).toBe(400);
+    }
+  });
+});

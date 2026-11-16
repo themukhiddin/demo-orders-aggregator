@@ -43,3 +43,20 @@ describe("POST /sync", () => {
     expect(rows[0].created_at.toISOString()).toBe("2026-02-10T21:30:00.000Z");
   });
 });
+
+describe("POST /sync — дозаполнение amountPaid", () => {
+  it("та же версия заказа дозаполняет paid_kop у строки, сохранённой до миграции", async () => {
+    const o = apiOrder({ amount: 1000, discountPercent: 10, amountPaid: 900 });
+    await ctx.app.inject({ method: "POST", url: "/webhooks/order", payload: o });
+    await ctx.db.query(`UPDATE orders SET paid_kop = NULL`);
+
+    ctx.api.pages.set(null, { items: [o], nextCursor: null });
+    const res = await ctx.app.inject({ method: "POST", url: "/sync" });
+    expect(res.json()).toMatchObject({ applied: 1, stale: 0 });
+    const { rows } = await ctx.db.query(`SELECT paid_kop FROM orders WHERE id = $1`, [o.id]);
+    expect(Number(rows[0].paid_kop)).toBe(90000);
+
+    // Повторный синк той же версии — уже stale
+    expect((await ctx.app.inject({ method: "POST", url: "/sync" })).json()).toMatchObject({ applied: 0, stale: 1 });
+  });
+});
