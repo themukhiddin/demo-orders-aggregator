@@ -57,8 +57,18 @@ describe("POST /webhooks/order — скидки", () => {
     expect(Number(rows[0].paid_kop)).toBe(90000);
   });
 
-  it("amountPaid больше amount, отрицательный или мусор — 400", async () => {
-    for (const bad of [{ amountPaid: 1000.01 }, { amountPaid: -1 }, { amountPaid: "abc" }, { discountPercent: 101 }, { discountPercent: "x" }]) {
+  it("amountPaid больше amount, отрицательный, пустой или мусор — 400", async () => {
+    for (const bad of [
+      { amountPaid: 1000.01 },
+      { amountPaid: -1 },
+      { amountPaid: "abc" },
+      { amountPaid: "" },
+      { discountPercent: 101 },
+      { discountPercent: "x" },
+      { discountPercent: "" },
+      { discountPercent: " " },
+      { amount: "" },
+    ]) {
       const res = await postWebhook(ctx.app, apiOrder({ amount: 1000, ...bad }));
       expect(res.statusCode, JSON.stringify(bad)).toBe(400);
     }

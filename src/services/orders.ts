@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ValidationError } from "../errors.js";
 import type { Order, OrdersRepository } from "../repositories/orders.js";
-import { parseRub, toKop } from "../utils/money.js";
+import { parseDecimal, parseRub, toKop } from "../utils/money.js";
 import { parseUtc } from "../utils/time.js";
 
 /** Заказ в формате внешнего API (поля, которые нам нужны; остальные игнорируем). */
@@ -28,8 +28,8 @@ function paidKop(amountKop: number, amountPaid: unknown, discountPercent: unknow
   if (amountPaid !== undefined && amountPaid !== null) {
     paid = toKop(parseRub(amountPaid));
   } else if (discountPercent !== undefined && discountPercent !== null) {
-    const pct = typeof discountPercent === "string" ? Number(discountPercent.trim()) : discountPercent;
-    if (typeof pct !== "number" || !Number.isFinite(pct) || pct < 0 || pct > 100) {
+    const pct = parseDecimal(discountPercent);
+    if (pct === null || pct < 0 || pct > 100) {
       throw new Error(`invalid discountPercent: ${JSON.stringify(discountPercent)}`);
     }
     // Доли копейки отбрасываем, как в toKop

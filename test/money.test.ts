@@ -13,6 +13,22 @@ describe("parseRub", () => {
     expect(() => parseRub(null)).toThrow();
     expect(() => parseRub(-1)).toThrow();
   });
+
+  it("пустая строка — не ноль рублей", () => {
+    // Number("") === 0: без явной проверки пустая сумма превращалась в бесплатный заказ
+    expect(() => parseRub("")).toThrow();
+    expect(() => parseRub("   ")).toThrow();
+  });
+
+  it("строка — только обычное десятичное число", () => {
+    // Number() понимает и такое, но суммы так не пишут
+    expect(() => parseRub("0x10")).toThrow();
+    expect(() => parseRub("1e3")).toThrow();
+    expect(() => parseRub("Infinity")).toThrow();
+    expect(() => parseRub("12,50")).toThrow();
+    expect(parseRub("0.5")).toBe(0.5);
+    expect(parseRub("0")).toBe(0);
+  });
 });
 
 describe("toKop / fromKop", () => {
