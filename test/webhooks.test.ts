@@ -68,6 +68,12 @@ describe("POST /webhooks/order — скидки", () => {
       { discountPercent: "" },
       { discountPercent: " " },
       { amount: "" },
+      // discountPercent проверяется и тогда, когда есть amountPaid
+      { amountPaid: 900, discountPercent: "abc" },
+      { amountPaid: 900, discountPercent: 250 },
+      { amountPaid: 900, discountPercent: -5 },
+      // больше amount на доли копейки — сравнение до отбрасывания долей
+      { amountPaid: 1000.009 },
     ]) {
       const res = await postWebhook(ctx.app, apiOrder({ amount: 1000, ...bad }));
       expect(res.statusCode, JSON.stringify(bad)).toBe(400);

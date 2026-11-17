@@ -22,23 +22,27 @@ export type ApplyResult = "created" | "updated" | "stale";
 /**
  * Сколько оплачено, в копейках. Источник правды — amountPaid.
  * Без amountPaid (старые заказы) — amount со скидкой discountPercent; без скидки — amount целиком.
+ * discountPercent проверяется всегда, когда он есть: некорректное значение — признак битых данных.
  */
-function paidKop(amountKop: number, amountPaid: unknown, discountPercent: unknown): number {
-  let paid: number;
-  if (amountPaid !== undefined && amountPaid !== null) {
-    paid = toKop(parseRub(amountPaid));
-  } else if (discountPercent !== undefined && discountPercent !== null) {
-    const pct = parseDecimal(discountPercent);
+function paidKop(amountRub: number, amountKop: number, amountPaid: unknown, discountPercent: unknown): number {
+  let pct: number | null = null;
+  if (discountPercent !== undefined && discountPercent !== null) {
+    pct = parseDecimal(discountPercent);
     if (pct === null || pct < 0 || pct > 100) {
       throw new Error(`invalid discountPercent: ${JSON.stringify(discountPercent)}`);
     }
-    // Доли копейки отбрасываем, как в toKop
-    paid = Math.floor(Number(((amountKop * (100 - pct)) / 100).toFixed(6)));
-  } else {
-    paid = amountKop;
   }
-  if (paid > amountKop) throw new Error(`amountPaid ${paid / 100} exceeds amount ${amountKop / 100}`);
-  return paid;
+  if (amountPaid !== undefined && amountPaid !== null) {
+    const paidRub = parseRub(amountPaid);
+    // Сравниваем до отбрасывания долей копейки: 1000.009 при amount 1000 — переплата, а не 1000
+    if (paidRub > amountRub) throw new Error(`amountPaid ${paidRub} exceeds amount ${amountRub}`);
+    return toKop(paidRub);
+  }
+  if (pct !== null) {
+    // Доли копейки отбрасываем, как в toKop
+    return Math.floor(Number(((amountKop * (100 - pct)) / 100).toFixed(6)));
+  }
+  return amountKop;
 }
 
 export class OrdersService {
@@ -49,12 +53,13 @@ export class OrdersService {
     if (!parsed.success) throw new ValidationError(`invalid order: ${parsed.error.issues.map((i) => i.path.join(".")).join(", ")}`);
     const o = parsed.data;
     try {
-      const amountKop = toKop(parseRub(o.amount));
+      const amountRub = parseRub(o.amount);
+      const amountKop = toKop(amountRub);
       return {
         id: o.id,
         customerId: o.customerId,
         amountKop,
-        paidKop: paidKop(amountKop, o.amountPaid, o.discountPercent),
+        paidKop: paidKop(amountRub, amountKop, o.amountPaid, o.discountPercent),
         status: o.status,
         createdAt: parseUtc(o.createdAt),
         updatedAt: parseUtc(o.updatedAt),
