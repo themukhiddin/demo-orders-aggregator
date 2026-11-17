@@ -35,11 +35,6 @@ const fromRow = (r: Row): Order => ({
 export class OrdersRepository {
   constructor(private readonly db: Db) {}
 
-  async get(id: string): Promise<Order | null> {
-    const { rows } = await this.db.query<Row>(`SELECT * FROM orders WHERE id = $1`, [id]);
-    return rows[0] ? fromRow(rows[0]) : null;
-  }
-
   /**
    * Сохраняет версию заказа, только если она новее сохранённой (по updated_at).
    * Проверка и запись — одним запросом: при параллельных вебхуках старая версия не затрёт новую.
